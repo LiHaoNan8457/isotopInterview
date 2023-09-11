@@ -1,0 +1,639 @@
+package com.example;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.web3j.abi.FunctionEncoder;
+import org.web3j.abi.FunctionReturnDecoder;
+import org.web3j.abi.datatypes.Function;
+import org.web3j.protocol.Web3j;
+import org.web3j.protocol.http.HttpService;
+import org.web3j.tx.Contract;
+
+import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
+
+@RestController
+public class ntfserver{
+
+    // 缓存图片数据，使用ConcurrentHashMap保证线程安全
+    private final ConcurrentHashMap<String, byte[]> imageCache = new ConcurrentHashMap<>();
+
+    // 获取NFT图片，每个请求会触发该方法
+    @GetMapping("/nft")
+    public byte[] getNFTImage(String tokenId) throws Exception {
+        // 从缓存中读取图片数据
+        byte[] data = imageCache.get(tokenId);
+        // 如果缓存中没有该图片数据，就从NFT合约获取
+        if (data == null) {
+            // 连接Mumbai链节点
+            Web3j web3j = Web3j.build(new HttpService("https://rpc-mumbai.maticvigil.com"));
+            // 合约地址和ABI
+            String contractAddress = "0x0314502e8F38be59221B95c60eEFeB39FE3b5a78";
+            String abi = "[{\n" +
+                    "    \"abi\": [\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"dds_\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"string\",\n" +
+                    "                    \"name\": \"name_\",\n" +
+                    "                    \"type\": \"string\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"constructor\",\n" +
+                    "            \"name\": \"constructor\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"anonymous\": false,\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"owner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"approved\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"Approval\",\n" +
+                    "            \"type\": \"event\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"anonymous\": false,\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"owner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"operator\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"indexed\": false,\n" +
+                    "                    \"internalType\": \"bool\",\n" +
+                    "                    \"name\": \"approved\",\n" +
+                    "                    \"type\": \"bool\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"ApprovalForAll\",\n" +
+                    "            \"type\": \"event\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"anonymous\": false,\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"previousOwner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"newOwner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"OwnershipTransferred\",\n" +
+                    "            \"type\": \"event\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"anonymous\": false,\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"from\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"indexed\": true,\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"Transfer\",\n" +
+                    "            \"type\": \"event\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"approve\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"owner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"balanceOf\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"getApproved\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"owner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"operator\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"isApprovedForAll\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"bool\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"bool\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"_to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"mint\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"_to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"mint\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [],\n" +
+                    "            \"name\": \"name\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"string\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"string\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [],\n" +
+                    "            \"name\": \"owner\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"ownerOf\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [],\n" +
+                    "            \"name\": \"renounceOwnership\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"_to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"safeMint\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"_to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"safeMint\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"from\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"safeTransferFrom\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"from\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"bytes\",\n" +
+                    "                    \"name\": \"data\",\n" +
+                    "                    \"type\": \"bytes\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"safeTransferFrom\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"operator\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"bool\",\n" +
+                    "                    \"name\": \"approved\",\n" +
+                    "                    \"type\": \"bool\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"setApprovalForAll\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"bytes4\",\n" +
+                    "                    \"name\": \"interfaceId\",\n" +
+                    "                    \"type\": \"bytes4\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"supportsInterface\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"bool\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"bool\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [],\n" +
+                    "            \"name\": \"symbol\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"string\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"string\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"index\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"tokenByIndex\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"owner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"index\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"tokenOfOwnerByIndex\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"tokenURI\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"string\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"string\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"offset\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"limit\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"tokens\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"total\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256[]\",\n" +
+                    "                    \"name\": \"tokenIds\",\n" +
+                    "                    \"type\": \"uint256[]\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"owner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"offset\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"limit\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"tokensOf\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"total\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256[]\",\n" +
+                    "                    \"name\": \"tokenIds\",\n" +
+                    "                    \"type\": \"uint256[]\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [],\n" +
+                    "            \"name\": \"totalSupply\",\n" +
+                    "            \"outputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"stateMutability\": \"view\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"from\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"to\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                },\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"uint256\",\n" +
+                    "                    \"name\": \"tokenId\",\n" +
+                    "                    \"type\": \"uint256\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"transferFrom\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"inputs\": [\n" +
+                    "                {\n" +
+                    "                    \"internalType\": \"address\",\n" +
+                    "                    \"name\": \"newOwner\",\n" +
+                    "                    \"type\": \"address\"\n" +
+                    "                }\n" +
+                    "            ],\n" +
+                    "            \"name\": \"transferOwnership\",\n" +
+                    "            \"outputs\": [],\n" +
+                    "            \"stateMutability\": \"nonpayable\",\n" +
+                    "            \"type\": \"function\"\n" +
+                    "        }\n" +
+                    "    ]\n" +
+                    "}";
+            // 创建NFT合约实例
+            Contract contract = Contract.load(contractAddress, web3j, null, Contract.GAS_PRICE, Contract.GAS_LIMIT);
+            // 构造获取metadata的方法对象
+            Function function = new Function(
+                    "tokenURI",
+                    Collections.singletonList(new org.web3j.abi.datatypes.Uint256(tokenId)),
+                    Collections.singletonList(new org.web3j.abi.datatypes.Utf8String("string"))
+            );
+            // 编码方法调用数据
+            String encodedFunction = FunctionEncoder.encode(function);
+            // 调用合约方法并获取返回值
+            String metadataBase64 = contract.executeCall(encodedFunction).send().toString();
+            // 解码JSON metadata
+            String metadataJson = new String(java.util.Base64.getDecoder().decode(metadataBase64));
+            // 解析出image字段中的base64编码的图片数据
+            String imageDataBase64 = metadataJson.substring(metadataJson.indexOf("\"image\":") + 9);
+            imageDataBase64 = imageDataBase64.substring(0, imageDataBase64.indexOf("\""));
+            // 解码图片数据并保存在缓存中
+            data = java.util.Base64.getDecoder().decode(imageDataBase64);
+            imageCache.putIfAbsent(tokenId, data);
+        }
+        return data;
+    }
+}
